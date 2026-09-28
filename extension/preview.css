@@ -1,0 +1,116 @@
+body {
+  margin: 0;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #111827;
+  color: #ffffff;
+}
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px;
+}
+
+.preview .stage {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 4 / 3;
+
+  overflow: hidden;
+  border-radius: 12px;
+  background: #000000;
+}
+
+.preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+
+  /* 거울처럼 보이도록 좌우 반전 (감지 로직에는 영향 없음, 화면 표시만) */
+  transform: scaleX(-1);
+}
+
+.preview .badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+
+  padding: 6px 12px;
+
+  font-size: 13px;
+  font-weight: 700;
+
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+.preview .badge.good {
+  color: #4ade80;
+}
+
+.preview .badge.warning {
+  color: #fbbf24;
+}
+
+.preview .badge.danger {
+  color: #f87171;
+}
+
+.preview .badge.uncalibrated,
+.preview .badge.calibrating {
+  color: #60a5fa;
+}
+
+.preview .hint {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #9ca3af;
+  text-align: center;
+}
+
+.preview .hint-done {
+  color: #86efac;
+  font-weight: 600;
+}
+
+.preview .error {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: #7f1d1d;
+  color: #fecaca;
+}
+
+.preview button {
+  margin-top: 16px;
+  padding: 10px 18px;
+
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+
+  background: #22c55e;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.preview button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.preview .toast {
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #14532d;
+  color: #bbf7d0;
+}
