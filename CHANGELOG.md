@@ -5,7 +5,7 @@
 ### 한국어
 
 **새 기능**
-- 🎉 **응원 알림**: 바른 자세를 5분 연속 유지할 때마다(5분, 10분, 15분…) 재미있는 문구로 응원 알림을 보내줘요. 알림 제목에 유지한 시간이 함께 표시돼요. (거북이·피자 드립 20종, 유지 시간에 따라 문구가 달라져요)
+- 🎉 **응원 알림**: 바른 자세를 15분 연속 유지할 때마다(15분, 30분, 45분…) 재미있는 문구로 응원 알림을 보내줘요. 알림 제목에 유지한 시간이 함께 표시돼요. (거북이·피자 드립 20종, 유지 시간에 따라 문구가 달라져요)
 - 🌐 **한국어 / English 전환**: 웹앱, 확장 프로그램(팝업·미리보기·권한 안내), 알림 문구까지 모두 두 언어를 지원해요. 처음엔 브라우저 언어를 따라가고, 우상단 🌐 버튼으로 바꿀 수 있어요.
 - 자리를 비우면 화면에 "자리 비움"으로 표시돼요.
 - 📖 **사용 설명서 페이지**: 웹앱의 '사용 방법' 버튼과 확장 팝업의 '사용 방법 · 알림 설정' 링크로 열 수 있어요. 알림을 받으려면 크롬(브라우저) 알림이 허용되어 있어야 한다는 안내와 설정 방법이 들어 있어요.
@@ -24,7 +24,7 @@
 ### English
 
 **New**
-- 🎉 **Cheer notifications**: Keep good posture for 5 minutes straight (and every 5 minutes after) and get a fun encouragement message, with the streak time shown in the title (20 turtle- and pizza-themed lines that change with how long you've held it).
+- 🎉 **Cheer notifications**: Keep good posture for 15 minutes straight (and every 15 minutes after) and get a fun encouragement message, with the streak time shown in the title (20 turtle- and pizza-themed lines that change with how long you've held it).
 - 🌐 **Korean / English**: The web app, extension (popup, preview window, permission page) and notifications are fully bilingual. It follows your browser language at first; switch any time with the 🌐 button.
 - An "Away" status is shown when nobody is in front of the camera.
 - 📖 **User guide page**: open it from the "How to use" button in the web app or the "Guide & notification setup" link in the extension popup. It explains that Chrome notifications must be allowed to receive alerts, and how to enable them.

@@ -4,6 +4,22 @@
 브라우저에서 도는 웹앱과, 백그라운드에서 계속 감시하는 크롬 확장
 두 가지 형태로 쓸 수 있습니다.
 
+## 설치해서 쓰기 (사용자용)
+
+일반 사용자는 **GitHub 계정이나 토큰이 필요 없습니다.** 아래 중 편한 방법으로 바로 쓰세요.
+
+| 방법 | 설치 | 특징 |
+| --- | --- | --- |
+| 크롬 확장 (추천) | Chrome 웹 스토어에서 **Huri Pizza**를 검색해 "Chrome에 추가" | 크롬이 켜져 있는 동안 백그라운드에서 계속 감시 |
+| 데스크탑 앱 | 이 저장소의 [Releases](https://github.com/hyunjin998/hurri_pizza/releases) 페이지에서 운영체제에 맞는 파일 다운로드 (Windows `.exe`, macOS `.dmg`, Linux `.AppImage`) | 로그인 없이 누구나 다운로드 가능. 크롬 없이 독립 실행 |
+| 웹앱 | 배포된 웹 주소 접속 | 탭이 열려 있는 동안만 동작 |
+
+- 처음 켜면 카메라 권한을 **허용**하고, 바른 자세로 앉아 **"바른 자세로 기준 설정"** 을 누르세요.
+- 알림을 받으려면 크롬(브라우저)과 운영체제의 알림 설정이 허용되어 있어야 합니다. 자세한 방법은 앱 안의 **사용 방법** 페이지를 보세요.
+- 데스크탑 앱은 코드 서명이 되어 있지 않아 처음 실행할 때 경고가 나올 수 있어요.
+  - Windows: "추가 정보 → 실행"을 누르세요.
+  - macOS: 앱을 우클릭(Control+클릭) → "열기"를 누르세요.
+
 ## 동작 방식
 
 - [MediaPipe Pose Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/pose_landmarker)로 카메라 영상에서 귀·어깨 위치를 추출합니다.
@@ -76,6 +92,20 @@ pnpm build:extension
   Cloud Storage + CDN, Vercel, Netlify 등)이면 충분하고, 별도 서버(Cloud
   Run 등)는 필요하지 않습니다.
 
+### 데스크탑 앱 릴리스 방법 (개발자용)
+
+GitHub Actions(`.github/workflows/build-electron.yml`)가 Windows/macOS/Linux 설치 파일을 빌드하고 Releases에 올려줍니다. 평소 `main`에 push해서는 빌드가 돌지 않고, 아래 두 경우에만 실행됩니다.
+
+1. **릴리스 만들기**: 버전 태그를 push하면 빌드 후 Releases에 파일이 자동으로 첨부됩니다.
+   ```bash
+   git tag v0.2.0
+   git push origin v0.2.0
+   ```
+2. **테스트 빌드**: GitHub의 Actions 탭 → Build Electron App → "Run workflow". 결과물은 실행 화면의 Artifacts에서 받습니다(GitHub 로그인 필요).
+
+- 별도의 GitHub 토큰(`GH_TOKEN`) 설정은 필요 없습니다. Releases 업로드는 Actions가 기본으로 제공하는 `GITHUB_TOKEN`을 쓰고, `electron:build`는 `--publish never`로 electron-builder 자체 업로드를 꺼두었습니다.
+- 태그 버전(`v0.2.0`)과 `package.json`의 `version`을 맞춰두면 파일 이름에 같은 버전이 붙습니다.
+
 ## 알려진 제약
 
 - 웹앱의 브라우저 알림(`Notification` API)은 같은 브라우저의 다른
@@ -86,6 +116,6 @@ pnpm build:extension
 ## 배터리 / 응원 알림 / 언어
 
 - **배터리 절약**: 감지 주기를 상태에 맞춰 조절합니다 (`src/posture/detectionSchedule.ts`). 양호 1초, 주의 0.5초, 자리 비움 2~10초, 카메라는 저해상도·저프레임으로 엽니다.
-- **응원 알림**: 바른 자세를 5분 연속 유지할 때마다 알림이 가고, 제목에 유지 시간이 표시됩니다. 문구는 `src/i18n/cheerMessages.ts`에서만 수정하면 되고, 알림 시점 규칙은 `src/posture/notifyTracker.ts`에 있습니다.
+- **응원 알림**: 바른 자세를 15분 연속 유지할 때마다 알림이 가고, 제목에 유지 시간이 표시됩니다. 문구는 `src/i18n/cheerMessages.ts`에서만 수정하면 되고, 알림 시점 규칙은 `src/posture/notifyTracker.ts`에 있습니다.
 - **한/영 전환**: 화면 우상단 🌐 버튼으로 전환합니다. 문구는 `src/i18n/strings.ts`, 확장 스토어 이름/설명은 `extension/public/_locales/*/messages.json`에 있습니다.
 - **사용 설명서**: 웹앱 우상단 📖 '사용 방법' 버튼, 확장 팝업의 '사용 방법 · 알림 설정' 링크로 열 수 있어요. 내용은 `src/i18n/manual.ts`에서 수정합니다. **크롬(브라우저) 알림 설정이 허용되어 있어야 알림을 받을 수 있어요.**
