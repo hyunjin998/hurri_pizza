@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Huri Pizza",
+    "description": "확장 프로그램 이름"
+  },
+  "extDescription": {
+    "message": "카메라로 거북목·구부정한 자세를 감지해 알려주고, 바른 자세를 오래 유지하면 응원도 보내주는 자세 알리미",
+    "description": "확장 프로그램 설명 (최대 132자)"
+  },
+  "actionTitle": {
+    "message": "Huri Pizza",
+    "description": "툴바 아이콘에 마우스를 올렸을 때 표시되는 제목"
+  }
+}

@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "Huri Pizza",
-  "description": "카메라로 거북목/구부정한 자세를 감지하고 백그라운드에서 알려주는 확장 프로그램",
-  "version": "0.1.0",
+  "default_locale": "en",
+  "name": "__MSG_extName__",
+  "description": "__MSG_extDescription__",
+  "version": "0.2.0",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -16,7 +17,8 @@
       "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
-    }
+    },
+    "default_title": "__MSG_actionTitle__"
   },
   "background": {
     "service_worker": "background.js",

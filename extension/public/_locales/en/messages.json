@@ -1,0 +1,14 @@
+{
+  "extName": {
+    "message": "Huri Pizza",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "Detects slouching and forward-head posture with your camera, alerts you, and cheers you on when you keep good posture.",
+    "description": "Extension description (max 132 characters)"
+  },
+  "actionTitle": {
+    "message": "Huri Pizza",
+    "description": "Tooltip title for the toolbar icon"
+  }
+}
