@@ -3,7 +3,8 @@ import {
   PoseLandmarker,
   type PoseLandmarkerResult,
 } from '@mediapipe/tasks-vision'
-import { PostureEngine } from '../src/posture/postureEngine'
+import { DetectionScheduler } from '../src/posture/detectionSchedule'
+import { PostureEngine, type PostureReading } from '../src/posture/postureEngine'
 import { broadcast, requestBaseline, type ExtensionMessage } from './messages'
 
 /*
@@ -18,17 +19,21 @@ import { broadcast, requestBaseline, type ExtensionMessage } from './messages'
  * 파이프라인에서 제외된다. requestAnimationFrame은 그 파이프라인에 묶여
  * 있어서 offscreen 문서에서는 콜백이 아예 실행되지 않거나(관찰됨: 초기화는
  * 끝까지 성공하지만 이후 아무 로그도 찍히지 않음) 매우 불규칙하게 실행될
- * 수 있다. 그래서 감지 루프는 rAF 대신 setInterval로 구동한다.
+ * 수 있다. 그래서 감지 루프는 rAF 대신 setTimeout 체인으로 구동한다.
+ *
+ * 배터리 절약: 고정 주기(setInterval) 대신, 지금 상태에 맞춰 다음 감지까지의
+ * 대기 시간을 매번 정한다 (양호 1초, 주의 0.5초, 자리 비움 2~10초 ... —
+ * detectionSchedule.ts). 카메라도 저해상도/저프레임으로 연다.
  */
-
-const DETECT_INTERVAL_MS = 150
 
 let poseLandmarker: PoseLandmarker | null = null
 let engine: PostureEngine | null = null
-let detectTimer: ReturnType<typeof setInterval> | null = null
+const scheduler = new DetectionScheduler()
+let detectTimer: ReturnType<typeof setTimeout> | null = null
 let lastTimestamp = 0
 let lastBroadcastAt = 0
-let detecting = false
+let lastBroadcast: PostureReading | null = null
+let stopped = false
 
 const video = document.createElement('video')
 video.muted = true
@@ -57,8 +62,10 @@ async function initPoseLandmarker(): Promise<PoseLandmarker> {
 async function startCamera(): Promise<void> {
   const stream = await navigator.mediaDevices.getUserMedia({
     video: {
-      width: { ideal: 640 },
-      height: { ideal: 480 },
+      // 포즈 모델 입력은 256px 정도라 큰 해상도/프레임은 전력만 쓴다
+      width: { ideal: 480 },
+      height: { ideal: 360 },
+      frameRate: { ideal: 10, max: 15 },
       facingMode: 'user',
     },
     audio: false,
@@ -69,18 +76,26 @@ async function startCamera(): Promise<void> {
   await video.play()
 
   lastTimestamp = 0
+  scheduleNext(0)
+}
 
-  if (detectTimer !== null) {
-    clearInterval(detectTimer)
+function scheduleNext(delayMs: number): void {
+  if (stopped) {
+    return
   }
 
-  detectTimer = setInterval(() => {
+  if (detectTimer !== null) {
+    clearTimeout(detectTimer)
+  }
+
+  detectTimer = setTimeout(() => {
+    detectTimer = null
     void detectTick()
-  }, DETECT_INTERVAL_MS)
+  }, delayMs)
 }
 
 async function detectTick(): Promise<void> {
-  if (!poseLandmarker || !engine || detecting) {
+  if (!poseLandmarker || !engine || stopped) {
     return
   }
 
@@ -88,43 +103,48 @@ async function detectTick(): Promise<void> {
     video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
     video.videoWidth === 0
   ) {
+    scheduleNext(300)
     return
   }
 
   const now = performance.now()
 
   if (now <= lastTimestamp) {
+    scheduleNext(50)
     return
   }
 
   lastTimestamp = now
-  detecting = true
+
+  let reading: PostureReading
 
   try {
-    let result: PoseLandmarkerResult
-
-    try {
-      result = poseLandmarker.detectForVideo(video, now)
-    } catch (err) {
-      console.error('[posture-check] Pose detection 실패:', err)
-      return
-    }
-
-    const reading = engine.process(result.landmarks?.[0], now)
-
-    /*
-     * 매 tick(최대 초당 수십 번)마다 메시지를 보내면 낭비이므로
-     * 약 300ms 간격으로만 브로드캐스트한다. baseline/reading 저장은
-     * background가 이 메시지를 받아서 대신 처리한다
-     * (offscreen 문서에서는 chrome.storage 접근이 막혀 있는 경우가 있다).
-     */
-    if (now - lastBroadcastAt > 300) {
-      lastBroadcastAt = now
-      broadcast({ type: 'POSTURE_UPDATE', reading })
-    }
-  } finally {
-    detecting = false
+    const result: PoseLandmarkerResult = poseLandmarker.detectForVideo(video, now)
+    reading = engine.process(result.landmarks?.[0], now)
+  } catch (err) {
+    console.error('[posture-check] Pose detection 실패:', err)
+    scheduleNext(1000)
+    return
   }
+
+  /*
+   * 상태가 바뀌었거나 300ms 이상 지났을 때만 브로드캐스트한다
+   * (보정 중에는 0.1초 간격이라 그대로 보내면 낭비).
+   * baseline/reading 저장은 background가 이 메시지를 받아서 대신 처리한다
+   * (offscreen 문서에서는 chrome.storage 접근이 막혀 있는 경우가 있다).
+   */
+  const changed =
+    lastBroadcast === null ||
+    lastBroadcast.status !== reading.status ||
+    lastBroadcast.present !== reading.present
+
+  if (changed || now - lastBroadcastAt >= 300) {
+    lastBroadcastAt = now
+    lastBroadcast = reading
+    broadcast({ type: 'POSTURE_UPDATE', reading })
+  }
+
+  scheduleNext(scheduler.next(reading, now))
 }
 
 chrome.runtime.onMessage.addListener((message: unknown) => {
@@ -132,6 +152,9 @@ chrome.runtime.onMessage.addListener((message: unknown) => {
 
   if (msg?.type === 'START_CALIBRATION') {
     engine?.startCalibration(performance.now())
+    scheduler.reset()
+    // 자리 비움 등으로 감지가 느려져 있어도 보정은 바로 시작한다
+    scheduleNext(0)
   }
 })
 
@@ -145,7 +168,7 @@ async function init(): Promise<void> {
   console.log('[posture-check] PoseLandmarker 준비 완료')
 
   await startCamera()
-  console.log('[posture-check] 카메라 시작됨, 감지 루프 시작 (setInterval 기반)')
+  console.log('[posture-check] 카메라 시작됨, 감지 루프 시작 (적응형 setTimeout)')
 }
 
 init().catch((err: unknown) => {
@@ -153,8 +176,10 @@ init().catch((err: unknown) => {
 })
 
 window.addEventListener('beforeunload', () => {
+  stopped = true
+
   if (detectTimer !== null) {
-    clearInterval(detectTimer)
+    clearTimeout(detectTimer)
     detectTimer = null
   }
 

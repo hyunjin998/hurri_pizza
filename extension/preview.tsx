@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { PostureReading } from '../src/posture/postureEngine'
+import { LanguageToggle } from '../src/i18n/LanguageToggle'
+import { readingLabel } from '../src/i18n/readingText'
+import { getStrings } from '../src/i18n/strings'
 import { broadcast, STORAGE_KEYS, type ExtensionMessage } from './messages'
 import { describeCameraError } from './cameraError'
+import { useExtensionLocale } from './useExtensionLocale'
 import './preview.css'
 
 /*
@@ -13,6 +17,9 @@ import './preview.css'
  * 표시한다.
  */
 function Preview() {
+  const [locale, setLocale] = useExtensionLocale()
+  const strings = getStrings(locale)
+  const stringsRef = useRef(strings)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [reading, setReading] = useState<PostureReading | null>(null)
   const [error, setError] = useState('')
@@ -25,7 +32,11 @@ function Preview() {
     const start = async () => {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            frameRate: { ideal: 15, max: 20 },
+          },
           audio: false,
         })
 
@@ -35,7 +46,7 @@ function Preview() {
         }
       } catch (err) {
         console.error('[posture-check] 카메라 미리보기 실패:', err)
-        setError(describeCameraError(err))
+        setError(describeCameraError(err, stringsRef.current))
       }
     }
 
@@ -91,12 +102,17 @@ function Preview() {
     }
   }, [reading?.status])
 
+  useEffect(() => {
+    stringsRef.current = strings
+    document.title = strings.previewTitle
+  }, [strings])
+
   const calibrate = () => {
     broadcast({ type: 'START_CALIBRATION' })
   }
 
   const statusClass = reading?.status ?? 'uncalibrated'
-  const statusLabel = reading?.label ?? '감지 대기 중...'
+  const statusLabel = reading ? readingLabel(reading, strings) : strings.waiting
   const isCalibrated =
     reading !== null &&
     reading.status !== 'uncalibrated' &&
@@ -104,34 +120,35 @@ function Preview() {
 
   return (
     <div className="preview">
+      <div className="preview-top">
+        <LanguageToggle
+          locale={locale}
+          label={strings.languageButtonLabel}
+          onChange={setLocale}
+        />
+      </div>
+
       <div className="stage">
         <video ref={videoRef} muted playsInline />
         <div className={`badge ${statusClass}`}>{statusLabel}</div>
       </div>
 
       {justCalibrated && (
-        <div className="toast">
-          ✅ 보정 완료! 이제부터 이 자세를 기준으로 알려드릴게요. 이 창은
-          닫으셔도 감지가 계속돼요.
-        </div>
+        <div className="toast">{strings.previewCalibrated}</div>
       )}
 
       {error ? (
         <div className="error">{error}</div>
       ) : isCalibrated ? (
-        <p className="hint hint-done">
-          설정이 끝났어요. 이 창은 닫으셔도 괜찮아요 — 백그라운드에서 계속
-          자세를 감지하고, 자세가 흐트러지면 알림으로 알려드릴게요.
-        </p>
+        <p className="hint hint-done">{strings.previewHintDone}</p>
       ) : (
-        <p className="hint">
-          화면에 어깨와 얼굴이 잘 보이도록 자리를 잡은 다음, 바른 자세로
-          앉은 상태에서 아래 버튼을 눌러주세요.
-        </p>
+        <p className="hint">{strings.previewHintSetup}</p>
       )}
 
       <button onClick={calibrate} disabled={reading?.status === 'calibrating'}>
-        {reading?.status === 'calibrating' ? '보정 중...' : '바른 자세로 기준 설정'}
+        {reading?.status === 'calibrating'
+          ? strings.calibratingButton
+          : strings.calibrate}
       </button>
     </div>
   )

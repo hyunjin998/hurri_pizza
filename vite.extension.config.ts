@@ -16,6 +16,7 @@ export default defineConfig({
         popup: resolve(__dirname, 'extension/popup.html'),
         permission: resolve(__dirname, 'extension/permission.html'),
         preview: resolve(__dirname, 'extension/preview.html'),
+        manual: resolve(__dirname, 'extension/manual.html'),
         offscreen: resolve(__dirname, 'extension/offscreen.html'),
         background: resolve(__dirname, 'extension/background.ts'),
       },

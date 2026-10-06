@@ -1,11 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { PostureReading } from '../src/posture/postureEngine'
+import { LanguageToggle } from '../src/i18n/LanguageToggle'
+import { readingDescription, readingLabel } from '../src/i18n/readingText'
+import { getStrings } from '../src/i18n/strings'
 import { describeCameraError } from './cameraError'
 import { broadcast, STORAGE_KEYS, type ExtensionMessage } from './messages'
+import { useExtensionLocale } from './useExtensionLocale'
 import './popup.css'
 
 function Popup() {
+  const [locale, setLocale] = useExtensionLocale()
+  const strings = getStrings(locale)
   const [enabled, setEnabled] = useState(false)
   const [reading, setReading] = useState<PostureReading | null>(null)
   const [permissionError, setPermissionError] = useState('')
@@ -62,13 +68,10 @@ function Popup() {
            * 조용히 거부하는 경우가 흔하다. 계속 떠 있는 진짜 탭에서
            * 다시 요청하도록 안내 페이지를 연다.
            */
-          setPermissionError(
-            '팝업에서는 카메라 권한 창이 안 뜰 수 있어요. 새 탭을 열어드릴게요 — ' +
-              '거기서 허용해주세요.',
-          )
+          setPermissionError(strings.popupPermissionTab)
           void chrome.tabs.create({ url: chrome.runtime.getURL('permission.html') })
         } else {
-          setPermissionError(describeCameraError(err))
+          setPermissionError(describeCameraError(err, strings))
         }
 
         return
@@ -114,6 +117,10 @@ function Popup() {
     broadcast({ type: 'START_CALIBRATION' })
   }
 
+  const openManual = () => {
+    void chrome.tabs.create({ url: chrome.runtime.getURL('manual.html') })
+  }
+
   const openPreviewWindow = () => {
     void chrome.windows.create({
       url: chrome.runtime.getURL('preview.html'),
@@ -124,14 +131,25 @@ function Popup() {
   }
 
   const statusClass = reading?.status ?? 'uncalibrated'
-  const statusLabel = reading?.label ?? (enabled ? '감지 대기 중...' : '꺼져 있음')
+  const statusLabel = reading
+    ? readingLabel(reading, strings)
+    : enabled
+      ? strings.waiting
+      : strings.off
 
   return (
     <div className="popup">
-      <h1>Huri Pizza</h1>
+      <div className="popup-header">
+        <h1>{strings.appName}</h1>
+        <LanguageToggle
+          locale={locale}
+          label={strings.languageButtonLabel}
+          onChange={setLocale}
+        />
+      </div>
 
       <button className="primary" onClick={() => void toggleEnabled()}>
-        {enabled ? '백그라운드 감시 끄기' : '백그라운드 감시 켜기'}
+        {enabled ? strings.popupDisable : strings.popupEnable}
       </button>
 
       {permissionError && (
@@ -139,15 +157,13 @@ function Popup() {
       )}
 
       {justCalibrated && (
-        <p className="description success">
-          ✅ 보정 완료! 이제부터 이 자세를 기준으로 알려드려요.
-        </p>
+        <p className="description success">{strings.popupCalibrated}</p>
       )}
 
       {enabled && (
         <>
           <button className="secondary" onClick={openPreviewWindow}>
-            내 모습 보기
+            {strings.popupShowPreview}
           </button>
 
           <button
@@ -156,17 +172,21 @@ function Popup() {
             disabled={reading?.status === 'calibrating'}
           >
             {reading?.status === 'calibrating'
-              ? '보정 중...'
-              : '바른 자세로 기준 설정'}
+              ? strings.calibratingButton
+              : strings.calibrate}
           </button>
         </>
       )}
 
       <div className={`status ${statusClass}`}>{statusLabel}</div>
 
-      {reading?.description && (
-        <p className="description">{reading.description}</p>
+      {reading && (
+        <p className="description">{readingDescription(reading, strings)}</p>
       )}
+
+      <button className="link" onClick={openManual}>
+        📖 {strings.popupManual}
+      </button>
     </div>
   )
 }

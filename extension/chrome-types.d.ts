@@ -46,6 +46,16 @@ declare namespace chrome.storage {
   }
 
   const local: StorageArea
+
+  type ChangeListener = (
+    changes: Record<string, { oldValue?: unknown; newValue?: unknown }>,
+    areaName: string,
+  ) => void
+
+  const onChanged: {
+    addListener(callback: ChangeListener): void
+    removeListener(callback: ChangeListener): void
+  }
 }
 
 declare namespace chrome.offscreen {
@@ -89,6 +99,7 @@ declare namespace chrome.notifications {
     iconUrl: string
     title: string
     message: string
+    priority?: number
   }
 
   function create(

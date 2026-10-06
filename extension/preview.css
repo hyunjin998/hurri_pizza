@@ -114,3 +114,30 @@ body {
   background: #14532d;
   color: #bbf7d0;
 }
+
+.preview .preview-top {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 8px;
+}
+
+.preview .lang-toggle {
+  width: auto;
+  margin: 0;
+  padding: 4px 10px;
+
+  font-size: 12px;
+  font-weight: 500;
+  color: #4b5563;
+
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.preview .lang-toggle:hover {
+  background: #e5e7eb;
+}

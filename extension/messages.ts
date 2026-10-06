@@ -19,8 +19,8 @@ export const STORAGE_KEYS = {
   enabled: 'enabled',
   reading: 'reading',
   baseline: 'baseline',
-  alertSince: 'alertSince',
-  lastNotifiedAt: 'lastNotifiedAt',
+  tracker: 'tracker',
+  locale: 'locale',
 } as const
 
 /*
