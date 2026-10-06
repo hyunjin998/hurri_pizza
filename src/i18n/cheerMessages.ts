@@ -9,7 +9,7 @@ import type { Locale } from './locale'
  * - 항목은 몇 개든 늘려도 된다 (직전에 보낸 문구는 피해서 랜덤으로 고른다).
  *
  * 티어(연속 유지 시간):
- *   early  5분 이상 ~ 30분 미만
+ *   early  15분 이상 ~ 30분 미만
  *   mid    30분 이상 ~ 60분 미만
  *   long   60분 이상
  */
@@ -22,7 +22,7 @@ export interface CheerMessage {
 
 /*
  * 알림 제목에는 "얼마나 유지했는지"를 항상 같이 보여준다.
- * 예) 잘하고 있어요! 🐢🍕 · 5분 연속 바른 자세
+ * 예) 잘하고 있어요! 🐢🍕 · 15분 연속 바른 자세
  */
 const CHEER_TITLE_BASE: Record<Locale, string> = {
   ko: '잘하고 있어요! 🐢🍕',

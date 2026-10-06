@@ -9,13 +9,13 @@ import type { PostureReading } from './postureEngine'
  * 직렬화 가능해서, 서비스워커가 꺼졌다 켜져도 chrome.storage에서 이어갈 수 있다.
  *
  * 1) 경고 알림: '주의'/'자세 점검'이 3초 이상 유지되면, 60초 쿨다운으로 알림
- * 2) 응원 알림: 바른 자세('양호')를 연속 5분 유지할 때마다 알림
+ * 2) 응원 알림: 바른 자세('양호')를 연속 15분 유지할 때마다 알림
  *    - 잠깐(5초 미만) 흐트러지는 것은 연속 기록을 끊지 않는다
  *    - 자리를 30초 넘게 비우거나, 감지가 60초 넘게 끊기면(절전 등) 기록 초기화
  */
 export const ALERT_NOTIFY_HOLD_MS = 3000
 export const NOTIFY_COOLDOWN_MS = 60_000
-export const CHEER_INTERVAL_MS = 5 * 60_000
+export const CHEER_INTERVAL_MS = 15 * 60_000
 export const STREAK_BREAK_MS = 5000
 export const ABSENT_GRACE_MS = 30_000
 export const STALE_UPDATE_MS = 60_000

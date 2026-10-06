@@ -79,7 +79,7 @@ const ko: ManualStrings = {
       title: '알림 종류',
       paragraphs: [
         '자세 경고: “주의” 또는 “자세 점검” 상태가 3초 이상 이어지면 알려줘요. 알림이 너무 자주 오지 않도록 최소 1분 간격을 둬요.',
-        '응원 알림: 바른 자세를 5분 연속 유지할 때마다(5분, 10분, 15분…) 재미있는 문구로 응원해줘요. 제목에 유지한 시간이 함께 표시돼요. 잠깐(5초 미만) 흐트러진 건 기록이 끊기지 않아요.',
+        '응원 알림: 바른 자세를 15분 연속 유지할 때마다(15분, 30분, 45분…) 재미있는 문구로 응원해줘요. 제목에 유지한 시간이 함께 표시돼요. 잠깐(5초 미만) 흐트러진 건 기록이 끊기지 않아요.',
         '자리를 30초 넘게 비우면 연속 기록이 초기화돼요.',
       ],
     },
@@ -168,7 +168,7 @@ const en: ManualStrings = {
       title: 'Types of notifications',
       paragraphs: [
         'Posture warning: sent when “Caution” or “Check posture” lasts 3 seconds or more, with at least 1 minute between warnings.',
-        'Cheer: every 5 minutes of continuous good posture (5, 10, 15 min…) you get a fun encouragement message, with the streak time shown in the title. A slip shorter than 5 seconds does not break your streak.',
+        'Cheer: every 15 minutes of continuous good posture (15, 30, 45 min…) you get a fun encouragement message, with the streak time shown in the title. A slip shorter than 5 seconds does not break your streak.',
         'If you leave the desk for more than 30 seconds, the streak resets.',
       ],
     },
