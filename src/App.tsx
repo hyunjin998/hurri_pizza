@@ -4,28 +4,90 @@ import {
   PoseLandmarker,
   type PoseLandmarkerResult,
 } from '@mediapipe/tasks-vision'
+import { CHEER_MESSAGES, cheerTitle, formatCheer } from './i18n/cheerMessages'
+import { describeCameraError } from './i18n/cameraError'
+import { LanguageToggle } from './i18n/LanguageToggle'
+import { readingDescription, readingLabel } from './i18n/readingText'
+import { getStrings } from './i18n/strings'
+import { useLocale } from './i18n/useLocale'
+import { ManualContent } from './manual/ManualContent'
+import { DetectionScheduler } from './posture/detectionSchedule'
+import {
+  INITIAL_TRACKER_STATE,
+  stepTracker,
+  type TrackerEvent,
+  type TrackerState,
+} from './posture/notifyTracker'
 import { PostureEngine, type PostureReading } from './posture/postureEngine'
 import './App.css'
-
-const ALERT_NOTIFY_HOLD_MS = 3000 // '주의'/'자세 점검' 알림을 보내기 전 유지해야 하는 시간(ms)
-const NOTIFY_COOLDOWN_MS = 60000 // 알림 남발 방지 쿨다운
 
 const BASELINE_STORAGE_KEY = 'huri-pizza:baseline'
 
 function App() {
+  const [locale, setLocale] = useLocale()
+  const strings = getStrings(locale)
+
+  /*
+   * 감지 루프/알림 같은 오래 사는 콜백이 항상 "최신 언어"를 쓰도록 ref로도 들고 있는다.
+   */
+  const localeRef = useRef(locale)
+
+  useEffect(() => {
+    localeRef.current = locale
+  }, [locale])
+
+  const [manualOpen, setManualOpen] = useState(
+    () => window.location.hash === '#manual',
+  )
+  const [notifPermission, setNotifPermission] = useState<
+    NotificationPermission | 'unsupported'
+  >(() =>
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  )
+
+  /*
+   * 사용자가 브라우저 설정에서 알림을 바꾸고 돌아오면 안내 배너가 바로 사라지도록
+   * 창에 다시 포커스가 올 때 권한 상태를 새로 읽는다.
+   */
+  useEffect(() => {
+    const refresh = () => {
+      if (typeof Notification !== 'undefined') {
+        setNotifPermission(Notification.permission)
+      }
+    }
+
+    window.addEventListener('focus', refresh)
+
+    return () => window.removeEventListener('focus', refresh)
+  }, [])
+
+  const requestNotifications = () => {
+    if (typeof Notification === 'undefined') {
+      return
+    }
+
+    void Notification.requestPermission().then(setNotifPermission)
+  }
+
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
 
   const poseLandmarkerRef = useRef<PoseLandmarker | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
-  const animationFrameRef = useRef<number | null>(null)
+  /*
+   * 감지 루프: rAF(초당 60회) 대신 setTimeout 체인으로, 상태에 맞춰
+   * 다음 감지까지의 대기 시간을 조절한다 (배터리 절약, detectionSchedule.ts).
+   */
+  const detectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loopActiveRef = useRef(false)
+  const schedulerRef = useRef(new DetectionScheduler())
 
   const lastTimestampRef = useRef<number>(0)
 
   const engineRef = useRef<PostureEngine | null>(null)
 
-  const alertSinceRef = useRef<number | null>(null)
-  const lastNotifiedAtRef = useRef<number>(0)
+  const trackerRef = useRef<TrackerState>({ ...INITIAL_TRACKER_STATE })
+  const lastShownRef = useRef<PostureReading | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [cameraStarted, setCameraStarted] = useState(false)
@@ -88,9 +150,7 @@ function App() {
       } catch (err) {
         console.error('MediaPipe 초기화 실패:', err)
 
-        setError(
-          '자세 분석 모델을 불러오지 못했습니다. 브라우저 콘솔을 확인해주세요.',
-        )
+        setError(getStrings(localeRef.current).webModelLoadError)
 
         setLoading(false)
       }
@@ -99,8 +159,11 @@ function App() {
     initialize()
 
     return () => {
-      if (animationFrameRef.current !== null) {
-        cancelAnimationFrame(animationFrameRef.current)
+      loopActiveRef.current = false
+
+      if (detectTimerRef.current !== null) {
+        clearTimeout(detectTimerRef.current)
+        detectTimerRef.current = null
       }
 
       streamRef.current?.getTracks().forEach((track) => {
@@ -112,10 +175,11 @@ function App() {
   }, [])
 
   /**
-   * '주의' 또는 '자세 점검' 상태 지속 시 브라우저 알림 전송
+   * 브라우저/데스크탑 알림 전송 (경고 + 응원)
+   * 언제 보낼지는 notifyTracker.ts가 정하고, 여기서는 표시만 한다.
    * (다른 탭/창을 보고 있어도 뜬다 — 이 페이지가 열려 있는 동안만 동작)
    */
-  const notifyPosture = (reading: PostureReading) => {
+  const showNotification = (event: TrackerEvent, reading: PostureReading) => {
     if (typeof Notification === 'undefined') {
       return
     }
@@ -124,16 +188,31 @@ function App() {
       return
     }
 
-    const isDanger = reading.status === 'danger'
+    const currentLocale = localeRef.current
+    const text = getStrings(currentLocale)
 
-    new Notification(
-      isDanger ? '자세가 많이 흐트러졌어요 🙆' : '자세를 점검해주세요',
-      {
-        body: reading.description,
-        icon: '/favicon.svg',
-        tag: 'posture-alert',
-      },
-    )
+    if (event.kind === 'alert') {
+      new Notification(
+        event.status === 'danger' ? text.alertTitleDanger : text.alertTitleWarning,
+        {
+          body: text.statusDescription[reading.status],
+          icon: '/favicon.svg',
+          tag: 'posture-alert',
+        },
+      )
+
+      return
+    }
+
+    new Notification(cheerTitle(currentLocale, event.minutes), {
+      body: formatCheer(
+        CHEER_MESSAGES[event.tier][event.index],
+        currentLocale,
+        event.minutes,
+      ),
+      icon: '/favicon.svg',
+      tag: 'posture-cheer',
+    })
   }
 
   /**
@@ -147,22 +226,21 @@ function App() {
         typeof Notification !== 'undefined' &&
         Notification.permission === 'default'
       ) {
-        void Notification.requestPermission()
+        void Notification.requestPermission().then(setNotifPermission)
       }
 
       if (!poseLandmarkerRef.current) {
-        setError('자세 분석 모델이 아직 준비되지 않았습니다.')
+        setError(strings.webModelNotReady)
         return
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
-          width: {
-            ideal: 1280,
-          },
-          height: {
-            ideal: 720,
-          },
+          // 포즈 모델 입력은 256px 정도라 HD 영상은 전력만 쓴다.
+          // 화면이 16:9라 비율을 맞춰 저해상도/저프레임으로 연다.
+          width: { ideal: 640 },
+          height: { ideal: 360 },
+          frameRate: { ideal: 15, max: 24 },
           facingMode: 'user',
         },
         audio: false,
@@ -187,14 +265,15 @@ function App() {
       setCameraStarted(true)
 
       lastTimestampRef.current = 0
+      schedulerRef.current.reset()
+      trackerRef.current = { ...INITIAL_TRACKER_STATE }
+      loopActiveRef.current = true
 
-      requestAnimationFrame(detectPose)
+      scheduleNext(0)
     } catch (err) {
       console.error('카메라 시작 실패:', err)
 
-      setError(
-        '카메라를 사용할 수 없습니다. 브라우저의 카메라 권한을 확인해주세요.',
-      )
+      setError(describeCameraError(err, strings))
     }
   }
 
@@ -204,31 +283,49 @@ function App() {
    */
   const startCalibration = () => {
     engineRef.current?.startCalibration(performance.now())
+    schedulerRef.current.reset()
+
+    // 자리 비움 등으로 감지가 느려져 있어도 보정은 바로 시작한다
+    if (loopActiveRef.current) {
+      scheduleNext(0)
+    }
   }
 
   /**
-   * 자세 감지
+   * 다음 감지 예약 (항상 하나만 예약해둔다)
+   */
+  const scheduleNext = (delayMs: number) => {
+    if (!loopActiveRef.current) {
+      return
+    }
+
+    if (detectTimerRef.current !== null) {
+      clearTimeout(detectTimerRef.current)
+    }
+
+    detectTimerRef.current = setTimeout(detectPose, delayMs)
+  }
+
+  /**
+   * 자세 감지 (한 번 실행하고 다음 실행을 예약한다)
    */
   const detectPose = () => {
+    detectTimerRef.current = null
+
     const video = videoRef.current
     const canvas = canvasRef.current
     const poseLandmarker = poseLandmarkerRef.current
 
-    if (!video || !canvas || !poseLandmarker) {
+    if (!loopActiveRef.current || !video || !canvas || !poseLandmarker) {
       return
     }
 
-    if (video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-      animationFrameRef.current =
-        requestAnimationFrame(detectPose)
-
-      return
-    }
-
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      animationFrameRef.current =
-        requestAnimationFrame(detectPose)
-
+    if (
+      video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+      video.videoWidth === 0 ||
+      video.videoHeight === 0
+    ) {
+      scheduleNext(200)
       return
     }
 
@@ -256,9 +353,7 @@ function App() {
     const now = performance.now()
 
     if (now <= lastTimestampRef.current) {
-      animationFrameRef.current =
-        requestAnimationFrame(detectPose)
-
+      scheduleNext(50)
       return
     }
 
@@ -270,46 +365,66 @@ function App() {
       result = poseLandmarker.detectForVideo(video, now)
     } catch (err) {
       console.error('Pose detection 실패:', err)
-
-      animationFrameRef.current =
-        requestAnimationFrame(detectPose)
-
+      scheduleNext(1000)
       return
     }
 
-    drawResult(result, ctx, canvas, now)
+    const reading = drawResult(result, ctx, canvas, now)
+    const visible = !document.hidden
 
-    animationFrameRef.current =
-      requestAnimationFrame(detectPose)
+    scheduleNext(schedulerRef.current.next(reading, now, visible))
   }
 
   /**
-   * 결과 표시
+   * 결과 표시 + 알림 판단
    */
   const drawResult = (
     result: PoseLandmarkerResult,
     ctx: CanvasRenderingContext2D,
     canvas: HTMLCanvasElement,
     now: number,
-  ) => {
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-
+  ): PostureReading | null => {
     const landmarks = result.landmarks?.[0]
     const engine = engineRef.current
 
     if (!engine) {
-      return
+      return null
     }
 
     const reading = engine.process(landmarks, now)
 
-    setPosture(reading)
+    /*
+     * 창이 가려져 있거나(최소화/다른 탭) 보이지 않으면 그리기/리렌더를 건너뛴다.
+     * 단, 상태가 바뀐 순간은 반영해둔다.
+     */
+    const prevShown = lastShownRef.current
+    const changed =
+      prevShown === null ||
+      prevShown.status !== reading.status ||
+      prevShown.present !== reading.present
+
+    if (!document.hidden || changed) {
+      lastShownRef.current = reading
+      setPosture(reading)
+    }
+
+    if (!document.hidden) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+
+      if (landmarks) {
+        drawLandmarks(ctx, canvas, landmarks)
+      }
+    }
 
     /*
      * 보정이 막 완료됐다면(baseline이 생겼다면) 저장해서
-     * 다음에 켤 때도 다시 보정하지 않아도 되게 한다
+     * 다음에 켤 때도 다시 보정하지 않아도 되게 한다.
+     * (매번 쓰지 않고 값이 바뀔 때만 저장)
      */
-    if (reading.baseline !== null) {
+    if (
+      reading.baseline !== null &&
+      reading.baseline !== prevShown?.baseline
+    ) {
       try {
         localStorage.setItem(
           BASELINE_STORAGE_KEY,
@@ -321,72 +436,62 @@ function App() {
     }
 
     /*
-     * 랜드마크가 있으면 귀/어깨 위치를 화면에 표시
+     * 경고(주의/자세 점검 지속) / 응원(바른 자세 장기 유지) 알림 판단
      */
-    if (landmarks) {
-      const leftEar = landmarks[7]
-      const rightEar = landmarks[8]
-      const leftShoulder = landmarks[11]
-      const rightShoulder = landmarks[12]
+    const { state, event } = stepTracker(trackerRef.current, reading, Date.now())
 
-      const ear =
-        (leftEar.visibility ?? 0) >= (rightEar.visibility ?? 0)
-          ? leftEar
-          : rightEar
+    trackerRef.current = state
 
-      const shoulder =
-        (leftShoulder.visibility ?? 0) >=
-        (rightShoulder.visibility ?? 0)
-          ? leftShoulder
-          : rightShoulder
-
-      drawPoint(
-        ctx,
-        ear.x * canvas.width,
-        ear.y * canvas.height,
-        12,
-        '#00ff88',
-      )
-
-      drawPoint(
-        ctx,
-        shoulder.x * canvas.width,
-        shoulder.y * canvas.height,
-        12,
-        '#00aaff',
-      )
-
-      ctx.beginPath()
-      ctx.moveTo(ear.x * canvas.width, ear.y * canvas.height)
-      ctx.lineTo(shoulder.x * canvas.width, shoulder.y * canvas.height)
-      ctx.strokeStyle = '#ffffff'
-      ctx.lineWidth = 5
-      ctx.stroke()
+    if (event) {
+      showNotification(event, reading)
     }
 
-    /*
-     * '주의' 또는 '자세 점검' 상태가 일정 시간 이상 지속되면 브라우저 알림 전송
-     */
-    const needsAttention = reading.status === 'warning' || reading.status === 'danger'
+    return reading
+  }
 
-    if (needsAttention) {
-      if (alertSinceRef.current === null) {
-        alertSinceRef.current = now
-      }
+  /**
+   * 귀/어깨 위치를 화면에 표시
+   */
+  const drawLandmarks = (
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    landmarks: NonNullable<PoseLandmarkerResult['landmarks']>[number],
+  ) => {
+    const leftEar = landmarks[7]
+    const rightEar = landmarks[8]
+    const leftShoulder = landmarks[11]
+    const rightShoulder = landmarks[12]
 
-      const heldLongEnough =
-        now - alertSinceRef.current >= ALERT_NOTIFY_HOLD_MS
-
-      const cooledDown =
-        now - lastNotifiedAtRef.current > NOTIFY_COOLDOWN_MS
-
-      if (heldLongEnough && cooledDown) {
-        notifyPosture(reading)
-        lastNotifiedAtRef.current = now
-      }
-    } else {
-      alertSinceRef.current = null
+    if (!leftEar || !rightEar || !leftShoulder || !rightShoulder) {
+      return
     }
+
+    const ear =
+      (leftEar.visibility ?? 0) >= (rightEar.visibility ?? 0)
+        ? leftEar
+        : rightEar
+
+    const shoulder =
+      (leftShoulder.visibility ?? 0) >= (rightShoulder.visibility ?? 0)
+        ? leftShoulder
+        : rightShoulder
+
+    drawPoint(ctx, ear.x * canvas.width, ear.y * canvas.height, 12, '#00ff88')
+
+    drawPoint(
+      ctx,
+      shoulder.x * canvas.width,
+      shoulder.y * canvas.height,
+      12,
+      '#00aaff',
+    )
+
+    ctx.beginPath()
+    ctx.moveTo(ear.x * canvas.width, ear.y * canvas.height)
+    ctx.lineTo(shoulder.x * canvas.width, shoulder.y * canvas.height)
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 5
+    ctx.stroke()
   }
 
   /**
@@ -412,9 +517,11 @@ function App() {
    * 카메라 종료
    */
   const stopCamera = () => {
-    if (animationFrameRef.current !== null) {
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
+    loopActiveRef.current = false
+
+    if (detectTimerRef.current !== null) {
+      clearTimeout(detectTimerRef.current)
+      detectTimerRef.current = null
     }
 
     streamRef.current?.getTracks().forEach((track) => {
@@ -422,6 +529,7 @@ function App() {
     })
 
     streamRef.current = null
+    lastShownRef.current = null
 
     if (videoRef.current) {
       videoRef.current.srcObject = null
@@ -439,10 +547,72 @@ function App() {
   return (
     <div className="app">
       <header className="header">
-        <h1>Huri Pizza</h1>
+        <div>
+          <h1>{strings.appName}</h1>
 
-        <p>카메라로 현재 자세를 확인해보세요.</p>
+          <p>{strings.webTagline}</p>
+        </div>
+
+        <div className="header-actions">
+          <button
+            type="button"
+            className="lang-toggle"
+            onClick={() => setManualOpen(true)}
+          >
+            📖 {strings.manualButton}
+          </button>
+
+          <LanguageToggle
+            locale={locale}
+            label={strings.languageButtonLabel}
+            onChange={setLocale}
+          />
+        </div>
       </header>
+
+      {(notifPermission === 'default' || notifPermission === 'denied') && (
+        <div className={`notif-banner ${notifPermission}`} role="status">
+          <span>
+            {notifPermission === 'denied'
+              ? strings.notifBlocked
+              : strings.notifDefault}
+          </span>
+
+          <span className="notif-banner-actions">
+            {notifPermission === 'default' && (
+              <button type="button" onClick={requestNotifications}>
+                {strings.notifAllowButton}
+              </button>
+            )}
+
+            <button type="button" onClick={() => setManualOpen(true)}>
+              {strings.notifGuideLink}
+            </button>
+          </span>
+        </div>
+      )}
+
+      {manualOpen && (
+        <div className="manual-overlay" role="dialog" aria-modal="true">
+          <div className="manual-overlay-bar">
+            <LanguageToggle
+              locale={locale}
+              label={strings.languageButtonLabel}
+              onChange={setLocale}
+            />
+
+            <button
+              type="button"
+              className="lang-toggle"
+              onClick={() => setManualOpen(false)}
+            >
+              ✕ {strings.manualClose}
+            </button>
+          </div>
+
+          <ManualContent locale={locale} />
+        </div>
+      )}
 
       <main className="main">
         <section className="camera-section">
@@ -456,15 +626,15 @@ function App() {
                 <div className="camera-icon">📷</div>
 
                 <p>
-                  카메라를 시작하면
+                  {strings.webCameraPlaceholderTop}
                   <br />
-                  자세 분석을 시작합니다.
+                  {strings.webCameraPlaceholderBottom}
                 </p>
               </div>
             )}
 
             {cameraStarted && !posture && (
-              <div className="camera-message">사람을 인식하는 중...</div>
+              <div className="camera-message">{strings.webDetectingPerson}</div>
             )}
           </div>
 
@@ -475,7 +645,7 @@ function App() {
                 onClick={startCamera}
                 disabled={loading}
               >
-                {loading ? '모델 준비 중...' : '카메라 시작'}
+                {loading ? strings.webModelLoading : strings.webStartCamera}
               </button>
             ) : (
               <>
@@ -485,14 +655,14 @@ function App() {
                   disabled={posture?.status === 'calibrating'}
                 >
                   {posture?.status === 'calibrating'
-                    ? '보정 중...'
+                    ? strings.calibratingButton
                     : engineRef.current?.isCalibrated
-                      ? '기준 자세 다시 설정'
-                      : '바른 자세로 기준 설정'}
+                      ? strings.calibrateAgain
+                      : strings.calibrate}
                 </button>
 
                 <button className="secondary-button" onClick={stopCamera}>
-                  카메라 종료
+                  {strings.webStopCamera}
                 </button>
               </>
             )}
@@ -503,23 +673,25 @@ function App() {
 
         <section className="result-section">
           <div className="result-card">
-            <h2>현재 자세</h2>
+            <h2>{strings.webCurrentPosture}</h2>
 
             {!posture ? (
-              <div className="empty-result">사람을 인식하는 중...</div>
+              <div className="empty-result">{strings.webDetectingPerson}</div>
             ) : (
               <>
                 <div className={`status ${posture.status}`}>
                   <span className="status-dot" />
-                  <span>{posture.label}</span>
+                  <span>{readingLabel(posture, strings)}</span>
                 </div>
 
-                <p className="description">{posture.description}</p>
+                <p className="description">
+                  {readingDescription(posture, strings)}
+                </p>
 
                 {relativePercent !== null && (
                   <div className="metric">
                     <div className="metric-header">
-                      <span>기준 자세 대비</span>
+                      <span>{strings.webRelative}</span>
                       <span>{relativePercent}%</span>
                     </div>
 
@@ -541,19 +713,11 @@ function App() {
           </div>
 
           <div className="info-card">
-            <h2>측정 방법</h2>
+            <h2>{strings.webHowTitle}</h2>
 
-            <p>
-              먼저 바른 자세로 앉은 상태에서 &lsquo;바른 자세로 기준
-              설정&rsquo;을 눌러 나만의 기준을 만드세요. 이후 귀와 어깨의
-              위치가 그 기준에서 얼마나 벗어났는지를 비교해 자세를
-              판단합니다.
-            </p>
+            <p>{strings.webHowBody}</p>
 
-            <p className="notice">
-              ※ 이 결과는 자세 상태를 확인하기 위한 참고용이며 의료적인
-              진단이 아닙니다.
-            </p>
+            <p className="notice">{strings.webDisclaimer}</p>
           </div>
         </section>
       </main>
