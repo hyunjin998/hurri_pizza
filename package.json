@@ -1,7 +1,9 @@
 {
   "name": "huri-pizza",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.2.0",
+  "description": "Huri Pizza - webcam posture detection app",
+  "author": "hyunjin998",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -11,7 +13,7 @@
     "build:extension": "tsc -p tsconfig.extension.json --noEmit && vite build --config vite.extension.config.ts",
     "electron": "electron .",
     "electron:dev": "ELECTRON_START_URL=http://localhost:5173 electron .",
-    "electron:build": "tsc -b && vite build && electron-builder"
+    "electron:build": "tsc -b && vite build && electron-builder --publish never"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
