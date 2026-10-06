@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "build:extension": "tsc -p tsconfig.extension.json --noEmit && vite build --config vite.extension.config.ts"
+    "build:extension": "tsc -p tsconfig.extension.json --noEmit && vite build --config vite.extension.config.ts",
+    "electron": "electron .",
+    "electron:dev": "ELECTRON_START_URL=http://localhost:5173 electron .",
+    "electron:build": "tsc -b && vite build && electron-builder"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.0.1",
@@ -20,8 +23,47 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.4.5",
+    "electron-builder": "^26.15.3",
     "oxlint": "^1.81.0",
     "typescript": "~6.0.2",
     "vite": "^8.3.0"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "com.huripizza.desktop",
+    "productName": "Huri Pizza",
+    "icon": "build/icon.png",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "extendInfo": {
+        "NSCameraUsageDescription": "자세 감지를 위해 카메라 접근이 필요합니다."
+      }
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Utility"
+    }
   }
 }

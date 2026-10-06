@@ -33,3 +33,12 @@ dist-extension.zip
 # env files
 .env
 .env.*
+
+# electron-builder output
+release
+
+# python cache
+__pycache__
+
+# packaged extension zips
+dist-extension*.zip
