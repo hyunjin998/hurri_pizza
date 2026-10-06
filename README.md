@@ -106,6 +106,14 @@ GitHub Actions(`.github/workflows/build-electron.yml`)가 Windows/macOS/Linux �
 - 별도의 GitHub 토큰(`GH_TOKEN`) 설정은 필요 없습니다. Releases 업로드는 Actions가 기본으로 제공하는 `GITHUB_TOKEN`을 쓰고, `electron:build`는 `--publish never`로 electron-builder 자체 업로드를 꺼두었습니다.
 - 태그 버전(`v0.2.0`)과 `package.json`의 `version`을 맞춰두면 파일 이름에 같은 버전이 붙습니다.
 
+### 크롬 확장 zip 만들기
+
+```bash
+pnpm package:extension
+```
+
+빌드 후 기존 `dist-extension.zip`을 `dist-extension_MMDD.zip`(오늘 날짜)으로 백업하고, 새 `dist-extension.zip`을 만듭니다. 이 zip을 Chrome 웹 스토어에 업로드하세요. (업로드 전 `extension/public/manifest.json`의 `version`을 올려야 합니다.)
+
 ## 알려진 제약
 
 - 웹앱의 브라우저 알림(`Notification` API)은 같은 브라우저의 다른

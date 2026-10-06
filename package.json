@@ -11,6 +11,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "build:extension": "tsc -p tsconfig.extension.json --noEmit && vite build --config vite.extension.config.ts",
+    "package:extension": "bash scripts/package-extension.sh",
     "electron": "electron .",
     "electron:dev": "ELECTRON_START_URL=http://localhost:5173 electron .",
     "electron:build": "tsc -b && vite build && electron-builder --publish never"
